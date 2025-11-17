@@ -1,0 +1,27 @@
+# Airbyte Docker Compose directories and files
+/tmp/airbyte_local
+/tmp/workspace
+
+# Environment files with secrets
+.env.local
+.env.*.local
+
+# Docker volumes
+airbyte_data
+airbyte_db
+airbyte_workspace
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

@@ -1,0 +1,15 @@
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+
+system.enableLogExecution:
+  - value: true
+    constraints: {}
+
+history.persistenceMaxQPS:
+  - value: 3000
+    constraints: {}
+
+history.persistenceGlobalMaxQPS:
+  - value: 3000
+    constraints: {}

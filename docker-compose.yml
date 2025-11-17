@@ -1,0 +1,182 @@
+version: "3.8"
+
+# Airbyte Docker Compose Stack for Testing
+# This is a simplified setup based on Airbyte OSS
+# Note: Docker Compose deployment is deprecated in favor of abctl/Kubernetes
+# This setup is for testing purposes only
+
+x-logging: &default-logging
+  options:
+    max-size: "100m"
+    max-file: "5"
+  driver: json-file
+
+services:
+  # Database
+  db:
+    image: airbyte/db:0.50.33
+    container_name: airbyte-db
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_DB}
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks:
+      - airbyte_network
+
+  # Worker
+  worker:
+    image: airbyte/worker:0.50.33
+    container_name: airbyte-worker
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - AIRBYTE_VERSION=${VERSION}
+      - CONFIG_ROOT=${CONFIG_ROOT}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USER=${DATABASE_USER}
+      - TRACKING_STRATEGY=${TRACKING_STRATEGY}
+      - WORKSPACE_DOCKER_MOUNT=${WORKSPACE_DOCKER_MOUNT}
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT}
+      - WORKER_ENVIRONMENT=${WORKER_ENVIRONMENT}
+      - LOCAL_ROOT=${LOCAL_ROOT}
+      - WEBAPP_URL=${WEBAPP_URL}
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - JOB_KUBE_NAMESPACE=${JOB_KUBE_NAMESPACE}
+      - SUBMITTER_NUM_THREADS=${SUBMITTER_NUM_THREADS}
+      - RESOURCE_CPU_REQUEST=${RESOURCE_CPU_REQUEST}
+      - RESOURCE_CPU_LIMIT=${RESOURCE_CPU_LIMIT}
+      - RESOURCE_MEMORY_REQUEST=${RESOURCE_MEMORY_REQUEST}
+      - RESOURCE_MEMORY_LIMIT=${RESOURCE_MEMORY_LIMIT}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - workspace:${WORKSPACE_ROOT}
+      - ${LOCAL_ROOT}:${LOCAL_ROOT}
+    networks:
+      - airbyte_network
+    depends_on:
+      - db
+
+  # Server
+  server:
+    image: airbyte/server:0.50.33
+    container_name: airbyte-server
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - AIRBYTE_VERSION=${VERSION}
+      - CONFIG_ROOT=${CONFIG_ROOT}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USER=${DATABASE_USER}
+      - TRACKING_STRATEGY=${TRACKING_STRATEGY}
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT}
+      - WORKER_ENVIRONMENT=${WORKER_ENVIRONMENT}
+      - LOCAL_ROOT=${LOCAL_ROOT}
+      - WEBAPP_URL=${WEBAPP_URL}
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - LOG_LEVEL=${LOG_LEVEL}
+    ports:
+      - "8001:8001"
+    volumes:
+      - workspace:${WORKSPACE_ROOT}
+      - data:${CONFIG_ROOT}
+      - ${LOCAL_ROOT}:${LOCAL_ROOT}
+    networks:
+      - airbyte_network
+    depends_on:
+      - db
+
+  # Web Application
+  webapp:
+    image: airbyte/webapp:0.50.33
+    container_name: airbyte-webapp
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "8000:80"
+    environment:
+      - AIRBYTE_VERSION=${VERSION}
+      - API_URL=${API_URL}
+      - TRACKING_STRATEGY=${TRACKING_STRATEGY}
+    networks:
+      - airbyte_network
+    depends_on:
+      - server
+
+  # Temporal
+  temporal:
+    image: airbyte/temporal:0.50.33
+    container_name: airbyte-temporal
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - DB=postgresql
+      - DB_PORT=${DATABASE_PORT}
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PWD=${DATABASE_PASSWORD}
+      - POSTGRES_SEEDS=${DATABASE_HOST}
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml
+      - LOG_LEVEL=${LOG_LEVEL}
+    volumes:
+      - ./temporal:/etc/temporal/config/dynamicconfig
+    networks:
+      - airbyte_network
+    depends_on:
+      - db
+
+  # Cron (Temporal auto-setup)
+  cron:
+    image: airbyte/cron:0.50.33
+    container_name: airbyte-cron
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - AIRBYTE_VERSION=${VERSION}
+      - CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION=${CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USER=${DATABASE_USER}
+      - DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - REMOTE_CONNECTOR_CATALOG_URL=${REMOTE_CONNECTOR_CATALOG_URL}
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - TRACKING_STRATEGY=${TRACKING_STRATEGY}
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT}
+      - MICRONAUT_ENVIRONMENTS=${WORKERS_MICRONAUT_ENVIRONMENTS}
+    networks:
+      - airbyte_network
+    depends_on:
+      - db
+
+  # Connector Builder Server
+  connector-builder-server:
+    image: airbyte/connector-builder-server:0.50.33
+    container_name: airbyte-connector-builder-server
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRBYTE_VERSION=${VERSION}
+      - CDK_VERSION=${CDK_VERSION}
+      - CDK_PYTHON=${CDK_PYTHON}
+    networks:
+      - airbyte_network
+
+volumes:
+  workspace:
+    name: ${WORKSPACE_DOCKER_MOUNT}
+  data:
+    name: ${DATA_DOCKER_MOUNT}
+  db:
+    name: ${DB_DOCKER_MOUNT}
+
+networks:
+  airbyte_network:
+    name: airbyte_network

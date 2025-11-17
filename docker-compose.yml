@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Airbyte Docker Compose Stack for Testing
 # This is a simplified setup based on Airbyte OSS
 # Note: Docker Compose deployment is deprecated in favor of abctl/Kubernetes
